@@ -1,0 +1,266 @@
+import AsyncStorage from "@react-native-community/async-storage";
+
+export const SIGNUP = 'SIGNUP';
+export const LOGIN = 'LOGIN';
+export const LOGOUT = "LOGOUT";
+export const AUTHENTICATE = "AUTHENTICATE";
+
+export const DOWNLOAD ="DOWNLOAD";
+
+export const PHONE  ="PHONE"
+
+
+import {firebaseConfig} from "./fierbasefile";
+
+
+import * as firebase from "firebase";
+import axios from "axios";
+
+
+
+
+
+
+
+firebase.initializeApp(firebaseConfig);
+
+
+export const authenticated = (userId,Token,statupScreen,expTimer)=>{
+  let timer;
+             
+            return dispatch =>{
+                //  dispatch(setLogoutTimer(expTimer));
+               dispatch({
+                type:AUTHENTICATE,
+                userId:userId,
+                Token:Token,
+              });
+             }
+     
+}
+
+
+
+
+export const signup = (email, password) => {
+  return async dispatch => {
+      
+    const response = await firebase.auth().createUserWithEmailAndPassword(email.trim(), password).catch(error=>{
+                let errorCode = error.code;
+                if(errorCode==="auth/email-already-in-use"){
+                     alert('This email exists already!')
+                }
+                else if(errorCode==="auth/invalid-email"){
+                       alert('invalied email')
+                }
+    });
+          
+    // console.log(response);
+    const repData = JSON.stringify(response);
+            // console.log(repData);
+           const resDataPares = JSON.parse(repData);
+          //  console.log(resDataPares);
+          //  console.log(resDataPares.user.uid);
+
+
+    dispatch(
+      authenticated(resDataPares.user.uid,resDataPares.user.stsTokenManager.accessToken,true,parseInt(3600))
+      );
+
+
+      const exprationTime = new Date(new Date().getTime() + parseInt(3600)*1000);
+      saveData(
+        resDataPares.user.stsTokenManager.accessToken,
+        resDataPares.user.uid,
+       exprationTime,
+       resDataPares.user.stsTokenManager.refreshToken
+       );
+
+  };
+};
+
+
+export const login = (email,password)=>{
+  return async (dispatch)=>{
+     const response = await firebase.auth().signInWithEmailAndPassword(email.trim(), password).catch(error=> {
+      // Handle Errors here.
+      var errorCode = error.code;
+      var errorMessage = error.message;
+      if (errorCode === 'auth/wrong-password') {
+        alert('Wrong password.');
+      } else if(errorCode==='auth/user-not-found') {
+        alert('user not found');
+      }
+      else if(errorCode==='auth/invalid-email'){
+          alert('invalid-email ! ')
+      }
+  
+      // console.log(error,'login error');
+    }); 
+       
+          const repData = JSON.stringify(response);
+            // console.log(repData);
+           const resDataPares = JSON.parse(repData);
+          //  console.log(resDataPares);
+          //  console.log(resDataPares.user.stsTokenManager.expirationTime);
+
+          dispatch(
+            authenticated(resDataPares.user.uid,resDataPares.user.stsTokenManager.accessToken,true,parseInt(3600))
+            )
+      //  dispatch({
+      //    type:LOGIN, 
+      //     token:resDataPares.user.stsTokenManager.accessToken,
+      //    uid:response.user.uid
+      //  });
+
+       const exprationTime = new Date(new Date().getTime() + parseInt(3600)*1000);
+       saveData(
+         resDataPares.user.stsTokenManager.accessToken,
+         resDataPares.user.uid,
+        exprationTime,
+        resDataPares.user.stsTokenManager.refreshToken
+        );
+
+
+  }
+}
+
+
+
+export const phoneAuth =()=>{
+  return async dispatch=>{
+            let tokens;
+    await firebase.auth().currentUser.getIdToken().then((e)=>{
+               tokens = e;
+       });
+
+      //  console.log('getIdToken',tokens);
+            
+           await firebase.auth().onAuthStateChanged((user)=> {
+            if (user) {
+              //  console.log('work')
+            const repData = JSON.stringify(user);
+            // console.log(repData);
+           const resDataPares = JSON.parse(repData);
+        //    console.log(resDataPares.user.stsTokenManager.accessToken)
+        //    console.log("hello",resDataPares.uid)
+        //    console.log("hello2",resDataPares.stsTokenManager.accessToken)
+        
+              dispatch(authenticated(resDataPares.uid,tokens,true,3600))
+              const exprationTime = new Date(new Date().getTime() + parseInt(3600)*1000);
+              saveData(
+                tokens,
+               resDataPares.uid,
+               exprationTime, 
+               resDataPares.stsTokenManager.refreshToken,
+               );
+            } else {
+              // No user is signed in.
+            }
+          })
+
+  }
+
+}
+
+
+export const ExrefreshToken = (token)=>{
+                    return async dispatch =>{
+                      
+                             const reesponse = await axios.post('https://securetoken.googleapis.com/v1/token?key=AIzaSyAuQ4rutrDoyUJzjieFhmiPhATUAQY9S_A',{
+                              'grant_type':'refresh_token',
+                              'refresh_token': token
+                             });
+                            // console.log('hello',reesponse);
+                                   
+                            const resData = reesponse.data;
+                            dispatch(authenticated(resData.user_id,resData.access_token,true,3600));
+                                  //  console.log('work',resData.expires_in);
+                                  //  console.log('work',resData.access_token);
+
+                            const exprationTime = new Date(new Date().getTime() + parseInt(resData.expires_in)*1000);
+                            saveData(
+                              resData.access_token,
+                             resData.user_id,
+                             exprationTime, 
+                             resData.refresh_token,
+                             );
+                            //  clearLogoutTimer();
+
+                    }
+}
+
+
+
+export const Logout = ()=>{
+  return async dispatch=>{
+    // clearLogoutTimer();
+    await AsyncStorage.removeItem('@storage_Key');
+            // console.log(removedata);
+   await firebase.auth().signOut().then(function() {
+      // console.log("singout Scress")
+      dispatch({ 
+        type:LOGOUT,
+        statupScreen:false 
+      })
+  
+    }).catch(function(error) {
+      //  console.log('logout',error)
+    });
+  }
+  
+}
+
+
+// const clearLogoutTimer = () => {
+//   if (timer) {
+//     clearTimeout(timer);
+//   }
+// };
+
+
+
+
+
+// const setLogoutTimer = (expirationTime)=>{
+                
+//   return async dispatch =>{
+//     const userDataS = await AsyncStorage.getItem('@storage_Key');
+//     const transfromData = JSON.parse(userDataS);
+//                  //   console.log(transfromData);
+//                    const { reftoken}   = transfromData;
+//                    console.log('newtoken',reftoken)
+//   timer = setTimeout(()=>{
+//           if(expirationTime!==null){
+//             // dispatch( );
+//             dispatch(ExrefreshToken(reftoken))
+//             console.log('logout')
+//           }
+//     },expirationTime*1000/100)
+
+//   }
+         
+          
+// }
+
+
+const saveData = (toekn,userid,expTime,rtoken)=>{
+
+                   const value = JSON.stringify({
+                    toekn:toekn,
+                    userid:userid,
+                    expTime:expTime.toISOString(),
+                    reftoken:rtoken
+                   
+                  })
+                try {
+                   AsyncStorage.setItem('@storage_Key',value);
+                } catch (error) {
+                  // console.log(error,'saveData')
+                }
+}
+
+
+
+
+
